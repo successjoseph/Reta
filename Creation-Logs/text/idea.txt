@@ -1,0 +1,160 @@
+# ================================
+# Project: Reta
+# ================================
+
+🧠 1. Project Overview
+Reta is an on-device Android automation suite that records, stores, and replays complex UI interactions (taps, swipes, text input, delays) directly on the Android device. The app supports voice activation via a local wake-word ("Kerry" by default), enabling hands-free execution of saved automation sequences. Reta is built to run fully offline, prioritizing privacy and reliability.
+
+------------------------------------------------------------------------------------
+🎯 2. Problem Statement
+Many repetitive tasks on Android devices (testing flows, repetitive app interactions, device setup steps, household device sequences) are time-consuming to repeat manually. Existing tools either require PC tethering (ADB), cloud services, or intrusive permissions. Users need a native, offline, reliable automations app with simple voice triggers and robust recording/playback fidelity.
+
+------------------------------------------------------------------------------------
+💡 3. Proposed Solution
+Reta records user interactions using Android Accessibility and input APIs, stores sequences locally, and replays them natively on the device. A background hotword detector listens for the wake word ("Kerry") and, upon recognized command, transcribes locally and triggers the matching automation sequence. All transcription and wake-word detection occur on-device; no audio is uploaded or stored.
+
+------------------------------------------------------------------------------------
+✨ 4. Core Features
+a. Recording:
+   - Record gestures: tap, long-press, swipe, drag, pinch (if needed), and typed input
+   - Record precise timing and optional delays
+   - Option to edit or insert delays after recording
+
+b. Sequence Storage & Management:
+   - Save sequences with custom names
+   - Rename, duplicate, edit, delete sequences
+   - Version metadata (created_at, last_run_at, run_count)
+
+c. Playback:
+   - Replay sequences exactly on-device
+   - Option for speed multiplier or custom delay overrides
+   - Foreground/Background execution modes with proper permission handling
+
+d. Voice Trigger:
+   - Hotword detection (default "Kerry") via an on-device listener (foreground service)
+   - Short command capture window after wake word (e.g., “Kerry run two bit washer automation”)
+   - Local STT (Vosk or PocketSphinx) for command transcription
+   - Fuzzy-match sequence names to transcription; triggers best match
+
+e. Scheduling & Triggers:
+   - Local scheduler (AlarmManager/WorkManager) for timed runs
+   - Quick Settings tile and notification action for one-tap runs
+   - Optional remote trigger endpoint (local-only, user-enabled)
+
+f. Privacy & Safety:
+   - All audio processing on-device; no cloud STT
+   - No storage of raw audio files; temporary buffers discarded after command parsing
+   - Explicit permissions flow and onboarding consent screen
+
+g. Logs & Summaries:
+   - Local activity logs: sequence runs (time, sequence_name, status: success/failed)
+   - Retain daily logs for 7 days
+   - Auto-generate weekly summary (totals, run success rate, most used sequences) and purge raw daily logs after summarization
+   - Summary stored in `summary.json`
+
+------------------------------------------------------------------------------------
+🧱 5. Technical Architecture
+
+Component         | Technology / API                     | Purpose
+------------------|--------------------------------------|-----------------------------------------------------------
+Platform          | Android (Kotlin recommended)         | Native app for on-device execution
+Recording Engine  | AccessibilityService + InputManager  | Capture UI events and replay gestures
+Voice Hotword     | PocketSphinx / Porcupine (optional)  | Lightweight wake-word detection (on-device)
+Local STT         | Vosk Android SDK                     | Local speech-to-text for command parsing
+Storage           | Room (SQLite)                        | Sequences, metadata, logs, summaries
+Scheduler         | AlarmManager / WorkManager           | Schedule and background execution
+Foreground Service| Android Foreground Service           | Persistent hotword listener with user-visible notification
+Permissions       | Accessibility, RECORD_AUDIO, SYSTEM_ALERT_WINDOW (if needed) | Required runtime permissions
+Optional Server   | Embedded lightweight HTTP (Ktor or Jetty) | Local network trigger (user-enabled)
+
+------------------------------------------------------------------------------------
+📁 6. Project Structure (Android)
+reta/
+├── app/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/reta/
+│   │   │   │   ├── MainActivity.kt
+│   │   │   │   ├── recorder/
+│   │   │   │   │   ├── RecorderService.kt
+│   │   │   │   │   └── RecordingEditor.kt
+│   │   │   │   ├── player/
+│   │   │   │   │   ├── PlayerService.kt
+│   │   │   │   │   └── PlaybackController.kt
+│   │   │   │   ├── voice/
+│   │   │   │   │   ├── HotwordService.kt
+│   │   │   │   │   ├── STTEngine.kt
+│   │   │   │   │   └── CommandParser.kt
+│   │   │   │   ├── storage/
+│   │   │   │   │   ├── AppDatabase.kt (Room)
+│   │   │   │   │   ├── SequenceDao.kt
+│   │   │   │   │   └── LogDao.kt
+│   │   │   │   ├── service/
+│   │   │   │   │   └── SchedulerManager.kt
+│   │   │   │   └── ui/
+│   │   │   │       ├── SequenceListActivity.kt
+│   │   │   │       └── SequenceEditorActivity.kt
+│   │   │   └── res/
+│   │   └── test/
+├── build.gradle
+├── settings.gradle
+├── README.txt
+└── cli/ (optional)
+    └── trigger.py   # tiny script for local-network trigger (optional)
+
+------------------------------------------------------------------------------------
+🛣 7. Development Timeline (suggested)
+
+Phase 0 — Setup (1 week)
+- Project scaffolding (Kotlin app + Room DB)
+- Permissions & Accessibility onboarding flow
+- Basic UI skeleton (list, editor stubs)
+
+Phase 1 — Recording & Playback Core (2 weeks)
+- Implement Accessibility-based recorder
+- Implement PlayerService with reliable replay
+- Save/Load sequences in Room
+
+Phase 2 — Voice Trigger & STT (1.5 weeks)
+- Hotword detection service (PocketSphinx / Porcupine)
+- Integrate Vosk for local STT and simple command parsing
+- Command → sequence mapping and triggering
+
+Phase 3 — Scheduling, Quick Tile & Logs (1 week)
+- Implement local scheduler (AlarmManager/WorkManager)
+- Quick Settings tile + notification actions
+- Logging pipeline (daily logs + weekly summary)
+
+Phase 4 — Polish & QA (1 week)
+- UI polish, edge-case handling, battery profiling
+- Permission UX improvements
+- Security & privacy audit (ensure no audio retention)
+
+Estimated MVP Completion: ~6–7 weeks
+
+------------------------------------------------------------------------------------
+✨ 8. Stretch Goals
+- Cloud sync of sequences (opt-in, encrypted)
+- Visual macro editor (flowchart-based)
+- Community-shared sequence marketplace (opt-in)
+- Advanced matching: natural-language aliasing for sequence names
+
+------------------------------------------------------------------------------------
+🔐 9. Privacy & Legal Notes
+- All audio processing (wake-word and STT) runs on-device.
+- No raw audio is persisted to disk; temporary buffers are cleared immediately after parsing.
+- Feature requires explicit consent; onboarding must present a concise disclosure and permissions flows.
+- If cloud features are added later, include robust opt-in UI and data export/delete options.
+
+------------------------------------------------------------------------------------
+📝 10. Logs & Data Policy (implementation detail)
+- `logs.json`: stores up to 7 days of daily run events (date keyed)
+- On the 8th day or on demand, the app aggregates the previous 7 days into `summary.json` with:
+  - total runs, success rate, most-used sequences
+- After summarization, delete the raw daily logs that were summarized
+- Keep summaries indefinitely (or until user clears data)
+
+------------------------------------------------------------------------------------
+Conclusion
+Reta provides an offline-first, privacy-respecting automation experience directly on Android. By combining Accessibility-driven recording/playback, local STT, and hotword triggers, Reta empowers users to automate complex flows hands-free. The app is optimized for reliability, minimal permissions creep, and low resource use on-device.
+
